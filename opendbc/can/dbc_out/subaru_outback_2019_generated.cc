@@ -269,10 +269,32 @@ const Signal sigs_320[] = {
       .type = SignalType::DEFAULT,
     },
     {
+      .name = "Signal1",
+      .b1 = 12,
+      .b2 = 2,
+      .bo = 50,
+      .is_signed = false,
+      .factor = 1,
+      .offset = 0,
+      .is_little_endian = true,
+      .type = SignalType::DEFAULT,
+    },
+    {
       .name = "Not_Full_Throttle",
       .b1 = 14,
       .b2 = 1,
       .bo = 49,
+      .is_signed = false,
+      .factor = 1,
+      .offset = 0,
+      .is_little_endian = true,
+      .type = SignalType::DEFAULT,
+    },
+    {
+      .name = "Signal2",
+      .b1 = 15,
+      .b2 = 1,
+      .bo = 48,
       .is_signed = false,
       .factor = 1,
       .offset = 0,
@@ -295,6 +317,17 @@ const Signal sigs_320[] = {
       .b1 = 30,
       .b2 = 1,
       .bo = 33,
+      .is_signed = false,
+      .factor = 1,
+      .offset = 0,
+      .is_little_endian = true,
+      .type = SignalType::DEFAULT,
+    },
+    {
+      .name = "Signal3",
+      .b1 = 31,
+      .b2 = 1,
+      .bo = 32,
       .is_signed = false,
       .factor = 1,
       .offset = 0,
@@ -339,6 +372,17 @@ const Signal sigs_320[] = {
       .b1 = 56,
       .b2 = 1,
       .bo = 7,
+      .is_signed = false,
+      .factor = 1,
+      .offset = 0,
+      .is_little_endian = true,
+      .type = SignalType::DEFAULT,
+    },
+    {
+      .name = "Signal4",
+      .b1 = 57,
+      .b2 = 7,
+      .bo = 0,
       .is_signed = false,
       .factor = 1,
       .offset = 0,
@@ -655,7 +699,7 @@ const Signal sigs_352[] = {
       .type = SignalType::DEFAULT,
     },
     {
-      .name = "ES_Error",
+      .name = "Cruise_Fault",
       .b1 = 21,
       .b2 = 1,
       .bo = 42,
@@ -712,7 +756,7 @@ const Signal sigs_352[] = {
 };
 const Signal sigs_353[] = {
     {
-      .name = "Throttle_Cruise",
+      .name = "Cruise_Throttle",
       .b1 = 0,
       .b2 = 12,
       .bo = 52,
@@ -734,7 +778,7 @@ const Signal sigs_353[] = {
       .type = SignalType::DEFAULT,
     },
     {
-      .name = "Cruise_Activated",
+      .name = "Car_Follow",
       .b1 = 16,
       .b2 = 1,
       .bo = 47,
@@ -767,7 +811,7 @@ const Signal sigs_353[] = {
       .type = SignalType::DEFAULT,
     },
     {
-      .name = "DistanceSwap",
+      .name = "Distance_Swap",
       .b1 = 21,
       .b2 = 1,
       .bo = 42,
@@ -800,7 +844,7 @@ const Signal sigs_353[] = {
       .type = SignalType::DEFAULT,
     },
     {
-      .name = "CloseDistance",
+      .name = "Close_Distance",
       .b1 = 24,
       .b2 = 8,
       .bo = 32,
@@ -833,7 +877,7 @@ const Signal sigs_353[] = {
       .type = SignalType::DEFAULT,
     },
     {
-      .name = "ES_Error",
+      .name = "Cruise_Fault",
       .b1 = 42,
       .b2 = 1,
       .bo = 21,
@@ -877,7 +921,7 @@ const Signal sigs_353[] = {
       .type = SignalType::DEFAULT,
     },
     {
-      .name = "Button",
+      .name = "Cruise_Button",
       .b1 = 48,
       .b2 = 3,
       .bo = 13,
@@ -1103,7 +1147,7 @@ const Signal sigs_358[] = {
       .type = SignalType::DEFAULT,
     },
     {
-      .name = "Distance_Bars",
+      .name = "Cruise_Distance",
       .b1 = 21,
       .b2 = 3,
       .bo = 40,
@@ -1125,7 +1169,7 @@ const Signal sigs_358[] = {
       .type = SignalType::DEFAULT,
     },
     {
-      .name = "ES_Error",
+      .name = "Cruise_Fault",
       .b1 = 32,
       .b2 = 1,
       .bo = 31,
@@ -1169,7 +1213,7 @@ const Signal sigs_358[] = {
       .type = SignalType::DEFAULT,
     },
     {
-      .name = "Lead_Car",
+      .name = "Car_Follow",
       .b1 = 46,
       .b2 = 1,
       .bo = 17,
@@ -1180,7 +1224,7 @@ const Signal sigs_358[] = {
       .type = SignalType::DEFAULT,
     },
     {
-      .name = "Obstacle_Distance",
+      .name = "Far_Distance",
       .b1 = 48,
       .b2 = 4,
       .bo = 12,
@@ -1566,7 +1610,7 @@ const Signal sigs_881[] = {
       .type = SignalType::DEFAULT,
     },
     {
-      .name = "LKA_Lockout",
+      .name = "Steer_Error_1",
       .b1 = 27,
       .b2 = 1,
       .bo = 36,
@@ -1649,6 +1693,19 @@ const Signal sigs_884[] = {
       .b1 = 28,
       .b2 = 1,
       .bo = 35,
+      .is_signed = false,
+      .factor = 1,
+      .offset = 0,
+      .is_little_endian = true,
+      .type = SignalType::DEFAULT,
+    },
+};
+const Signal sigs_977[] = {
+    {
+      .name = "UNITS",
+      .b1 = 15,
+      .b2 = 1,
+      .bo = 48,
       .is_signed = false,
       .factor = 1,
       .offset = 0,
@@ -1763,7 +1820,7 @@ const Msg msgs[] = {
     .sigs = sigs_352,
   },
   {
-    .name = "ES_CruiseThrottle",
+    .name = "ES_Distance",
     .address = 0x161,
     .size = 8,
     .num_sigs = ARRAYSIZE(sigs_353),
@@ -1840,6 +1897,13 @@ const Msg msgs[] = {
     .sigs = sigs_884,
   },
   {
+    .name = "Dash_State2",
+    .address = 0x3D1,
+    .size = 8,
+    .num_sigs = ARRAYSIZE(sigs_977),
+    .sigs = sigs_977,
+  },
+  {
     .name = "Dash_State",
     .address = 0x6D1,
     .size = 8,
@@ -1854,12 +1918,6 @@ const Val vals[] = {
       .address = 0x148,
       .def_val = "0 N 1 D 2 D 3 D 4 D 5 D 6 D 14 R 15 P",
       .sigs = sigs_328,
-    },
-    {
-      .name = "Units",
-      .address = 0x6D1,
-      .def_val = "0 METRIC 1 IMPERIAL",
-      .sigs = sigs_1745,
     },
 };
 

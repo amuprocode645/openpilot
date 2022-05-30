@@ -1,25 +1,24 @@
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-#include <signal.h>
-#include <unistd.h>
-#include <assert.h>
-#include <sys/time.h>
+#include <cutils/log.h>
+#include <hardware/sensors.h>
 #include <sys/cdefs.h>
-#include <sys/types.h>
 #include <sys/resource.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <utils/Timers.h>
 
+#include <cassert>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <map>
 #include <set>
 
-#include <cutils/log.h>
-#include <hardware/sensors.h>
-#include <utils/Timers.h>
-
-#include "messaging.hpp"
-#include "common/timing.h"
-#include "common/swaglog.h"
+#include "cereal/messaging/messaging.h"
+#include "selfdrive/common/swaglog.h"
+#include "selfdrive/common/timing.h"
+#include "selfdrive/common/util.h"
 
 // ACCELEROMETER_UNCALIBRATED is only in Android O
 // https://developer.android.com/reference/android/hardware/Sensor.html#STRING_TYPE_ACCELEROMETER_UNCALIBRATED
@@ -32,14 +31,10 @@
 #define SENSOR_PROXIMITY 6
 #define SENSOR_LIGHT 7
 
-volatile sig_atomic_t do_exit = 0;
+ExitHandler do_exit;
 volatile sig_atomic_t re_init_sensors = 0;
 
 namespace {
-
-void set_do_exit(int sig) {
-  do_exit = 1;
-}
 
 void sigpipe_handler(int sig) {
   LOGE("SIGPIPE received");
@@ -53,7 +48,7 @@ void sensor_loop() {
   bool low_power_mode = false;
 
   while (!do_exit) {
-    SubMaster sm({"thermal"});
+    SubMaster sm({"deviceState"});
     PubMaster pm({"sensorEvents"});
 
     struct sensors_poll_device_t* device;
@@ -194,15 +189,16 @@ void sensor_loop() {
 
       pm.send("sensorEvents", msg);
 
-      if (re_init_sensors){
+      if (re_init_sensors) {
         LOGE("Resetting sensors");
         re_init_sensors = false;
         break;
       }
 
       // Check whether to go into low power mode at 5Hz
-      if (frame % 20 == 0 && sm.update(0) > 0) {
-        bool offroad = !sm["thermal"].getThermal().getStarted();
+      if (frame % 20 == 0) {
+        sm.update(0);
+        bool offroad = !sm["deviceState"].getDeviceState().getStarted();
         if (low_power_mode != offroad) {
           for (auto &s : sensors) {
             device->activate(device, s.first, 0);
@@ -223,9 +219,7 @@ void sensor_loop() {
 }// Namespace end
 
 int main(int argc, char *argv[]) {
-  setpriority(PRIO_PROCESS, 0, -13);
-  signal(SIGINT, (sighandler_t)set_do_exit);
-  signal(SIGTERM, (sighandler_t)set_do_exit);
+  setpriority(PRIO_PROCESS, 0, -18);
   signal(SIGPIPE, (sighandler_t)sigpipe_handler);
 
   sensor_loop();

@@ -21,9 +21,7 @@
 
 #include <stdio.h>
 
-#include "services.h"
-
-#include "msgq.hpp"
+#include "msgq.h"
 
 void sigusr2_handler(int signal) {
   assert(signal == SIGUSR2);
@@ -83,20 +81,9 @@ void msgq_wait_for_subscriber(msgq_queue_t *q){
   return;
 }
 
-bool service_exists(std::string path){
-  for (const auto& it : services) {
-    if (it.name == path) {
-      return true;
-    }
-  }
-  return false;
-}
 
 int msgq_new_queue(msgq_queue_t * q, const char * path, size_t size){
   assert(size < 0xFFFFFFFF); // Buffer must be smaller than 2^32 bytes
-  if (!service_exists(std::string(path))){
-    std::cout << "Warning, " << std::string(path) << " is not in service list." << std::endl;
-  }
   std::signal(SIGUSR2, sigusr2_handler);
 
   const char * prefix = "/dev/shm/";
@@ -104,7 +91,7 @@ int msgq_new_queue(msgq_queue_t * q, const char * path, size_t size){
   strcpy(full_path, prefix);
   strcat(full_path, path);
 
-  auto fd = open(full_path, O_RDWR | O_CREAT, 0777);
+  auto fd = open(full_path, O_RDWR | O_CREAT, 0664);
   if (fd < 0) {
     std::cout << "Warning, could not open: " << full_path << std::endl;
     delete[] full_path;
@@ -464,4 +451,14 @@ int msgq_poll(msgq_pollitem_t * items, size_t nitems, int timeout){
   }
 
   return num;
+}
+
+bool msgq_all_readers_updated(msgq_queue_t *q) {
+  uint64_t num_readers = *q->num_readers;
+  for (uint64_t i = 0; i < num_readers; i++) {
+    if (*q->read_valids[i] && *q->write_pointer != *q->read_pointers[i]) {
+      return false;
+    }
+  }
+  return num_readers > 0;
 }

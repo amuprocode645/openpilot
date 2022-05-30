@@ -1,7 +1,8 @@
+from cereal import car
 from selfdrive.car import apply_toyota_steer_torque_limits
 from selfdrive.car.chrysler.chryslercan import create_lkas_hud, create_lkas_command, \
                                                create_wheel_buttons
-from selfdrive.car.chrysler.values import CAR, SteerLimitParams
+from selfdrive.car.chrysler.values import CAR, CarControllerParams
 from opendbc.can.packer import CANPacker
 
 class CarController():
@@ -20,19 +21,18 @@ class CarController():
     # this seems needed to avoid steering faults and to force the sync with the EPS counter
     frame = CS.lkas_counter
     if self.prev_frame == frame:
-      return []
+      return car.CarControl.Actuators.new_message(), []
 
-    # *** compute control surfaces ***
     # steer torque
-    new_steer = actuators.steer * SteerLimitParams.STEER_MAX
+    new_steer = int(round(actuators.steer * CarControllerParams.STEER_MAX))
     apply_steer = apply_toyota_steer_torque_limits(new_steer, self.apply_steer_last,
-                                                   CS.out.steeringTorqueEps, SteerLimitParams)
+                                                   CS.out.steeringTorqueEps, CarControllerParams)
     self.steer_rate_limited = new_steer != apply_steer
 
     moving_fast = CS.out.vEgo > CS.CP.minSteerSpeed  # for status message
     if CS.out.vEgo > (CS.CP.minSteerSpeed - 0.5):  # for command high bit
       self.gone_fast_yet = True
-    elif self.car_fingerprint in (CAR.PACIFICA_2019_HYBRID, CAR.JEEP_CHEROKEE_2019):
+    elif self.car_fingerprint in (CAR.PACIFICA_2019_HYBRID, CAR.PACIFICA_2020, CAR.JEEP_CHEROKEE_2019):
       if CS.out.vEgo < (CS.CP.minSteerSpeed - 3.0):
         self.gone_fast_yet = False  # < 14.5m/s stock turns off this bit, but fine down to 13.5
     lkas_active = moving_fast and enabled
@@ -67,4 +67,7 @@ class CarController():
     self.ccframe += 1
     self.prev_frame = frame
 
-    return can_sends
+    new_actuators = actuators.copy()
+    new_actuators.steer = apply_steer / CarControllerParams.STEER_MAX
+
+    return new_actuators, can_sends

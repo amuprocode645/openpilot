@@ -37,9 +37,9 @@ def get_fingerprint(lr):
 
 if __name__ == "__main__":
   if len(sys.argv) < 2:
-    print("Usage: ./get_fingerprint_internal.py <route>")
+    print("Usage: ./fingerprint_from_route.py <route>")
     sys.exit(1)
 
   route = Route(sys.argv[1])
-  lr = MultiLogIterator(route.log_paths()[:5], wraparound=False)
+  lr = MultiLogIterator(route.log_paths()[:5])
   get_fingerprint(lr)

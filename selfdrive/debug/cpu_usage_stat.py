@@ -24,23 +24,16 @@ import argparse
 import re
 from collections import defaultdict
 
+from selfdrive.manager.process_config import managed_processes
 
 # Do statistics every 5 seconds
 PRINT_INTERVAL = 5
 SLEEP_INTERVAL = 0.2
 
 monitored_proc_names = [
-  # openpilot procs
-  'controlsd', 'locationd', 'loggerd','plannerd',
-  'ubloxd', 'thermald', 'uploader', 'deleter', 'radard', 'logmessaged', 'tombstoned',
-  'logcatd', 'proclogd', 'boardd', 'pandad', './ui', 'ui', 'calibrationd', 'params_learner', 'modeld', 'dmonitoringd',
-  'dmonitoringmodeld', 'camerad', 'sensord', 'updated', 'gpsd', 'athena', 'locationd', 'paramsd',
-
-  'ai.comma.plus.offroad',
-
   # android procs
   'SurfaceFlinger', 'sensors.qcom'
-]
+] + list(managed_processes.keys())
 
 cpu_time_names = ['user', 'system', 'children_user', 'children_system']
 
@@ -48,12 +41,10 @@ timer = getattr(time, 'monotonic', time.time)
 
 
 def get_arg_parser():
-  parser = argparse.ArgumentParser(
-    description="Unlogger and UI",
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
   parser.add_argument("proc_names", nargs="?", default='',
-                      help="Process names to be monitored, comma seperated")
+                      help="Process names to be monitored, comma separated")
   parser.add_argument("--list_all", action='store_true',
                       help="Show all running processes' cmdline")
   parser.add_argument("--detailed_times", action='store_true',
@@ -75,7 +66,7 @@ if __name__ == "__main__":
   for p in psutil.process_iter():
     if p == psutil.Process():
       continue
-    matched = any([l for l in p.cmdline() if any([pn for pn in monitored_proc_names if re.match(r'.*{}.*'.format(pn), l, re.M | re.I)])])
+    matched = any(l for l in p.cmdline() if any(pn for pn in monitored_proc_names if re.match(r'.*{}.*'.format(pn), l, re.M | re.I)))
     if matched:
       k = ' '.join(p.cmdline())
       print('Add monitored proc:', k)
@@ -119,14 +110,14 @@ if __name__ == "__main__":
           stat['avg'][name] = (stat['avg'][name] * (i - c) + avg * c) / (i)
           stat['cpu_samples'][name] = []
 
-        msg = 'avg: {1:.2%}, min: {2:.2%}, max: {3:.2%} {0}'.format(os.path.basename(k), stat['avg']['total'], stat['min']['total'], stat['max']['total'])
+        msg = f"avg: {stat['avg']['total']:.2%}, min: {stat['min']['total']:.2%}, max: {stat['max']['total']:.2%} {os.path.basename(k)}"
         if args.detailed_times:
           for stat_type in ['avg', 'min', 'max']:
-            msg += '\n {}: {}'.format(stat_type, [name + ':' + str(round(stat[stat_type][name]*100, 2)) for name in cpu_time_names])
+            msg += f"\n {stat_type}: {[(name + ':' + str(round(stat[stat_type][name] * 100, 2))) for name in cpu_time_names]}"
         l.append((os.path.basename(k), stat['avg']['total'], msg))
       l.sort(key=lambda x: -x[1])
       for x in l:
         print(x[2])
-      print('avg sum: {0:.2%} over {1} samples {2} seconds\n'.format(
-        sum([stat['avg']['total'] for k, stat in stats.items()]), i, i * SLEEP_INTERVAL
+      print('avg sum: {:.2%} over {} samples {} seconds\n'.format(
+        sum(stat['avg']['total'] for k, stat in stats.items()), i, i * SLEEP_INTERVAL
       ))

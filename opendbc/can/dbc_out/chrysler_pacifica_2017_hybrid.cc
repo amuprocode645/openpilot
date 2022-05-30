@@ -790,6 +790,17 @@ const Signal sigs_501[] = {
       .type = SignalType::DEFAULT,
     },
     {
+      .name = "CRUISE_STATE",
+      .b1 = 33,
+      .b2 = 3,
+      .bo = 28,
+      .is_signed = false,
+      .factor = 1,
+      .offset = 0,
+      .is_little_endian = false,
+      .type = SignalType::DEFAULT,
+    },
+    {
       .name = "ACC_DISTANCE_CONFIG_2",
       .b1 = 46,
       .b2 = 2,
@@ -2456,6 +2467,12 @@ const Msg msgs[] = {
 };
 
 const Val vals[] = {
+    {
+      .name = "CRUISE_STATE",
+      .address = 0x1F5,
+      .def_val = "0 OFF 1 CC_ON 2 CC_ENGAGED 3 ACC_ON 4 ACC_ENGAGED",
+      .sigs = sigs_501,
+    },
     {
       .name = "PRNDL",
       .address = 0x2EA,

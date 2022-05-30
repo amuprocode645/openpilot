@@ -1,17 +1,16 @@
-#include <string>
-#include <QApplication>
-
-#ifdef QCOM2
-#include <qpa/qplatformnativeinterface.h>
-#include <QPlatformSurfaceEvent>
-#include <wayland-client-protocol.h>
-#endif
-
-#include "qt_window.hpp"
+#include "selfdrive/ui/qt/qt_window.h"
 
 void setMainWindow(QWidget *w) {
-  float scale = getenv("SCALE") != NULL ? std::stof(getenv("SCALE")) : 1.0;
-  w->setFixedSize(vwp_w*scale, vwp_h*scale);
+  const QSize sz = QGuiApplication::primaryScreen()->size();
+  if (Hardware::PC() && sz.width() <= 1920 && sz.height() <= 1080 && getenv("SCALE") == nullptr) {
+    w->setMinimumSize(QSize(640, 480)); // allow resize smaller than fullscreen
+    w->setMaximumSize(QSize(2160, 1080));
+    w->resize(sz);
+  } else {
+    const float scale = util::getenv("SCALE", 1.0f);
+    const bool wide = (sz.width() >= WIDE_WIDTH) ^ (getenv("INVERT_WIDTH") != NULL);
+    w->setFixedSize(QSize(wide ? WIDE_WIDTH : 1920, 1080) * scale);
+  }
   w->show();
 
 #ifdef QCOM2
@@ -24,3 +23,8 @@ void setMainWindow(QWidget *w) {
 }
 
 
+extern "C" {
+  void set_main_window(void *w) {
+    setMainWindow((QWidget*)w);
+  }
+}

@@ -2,12 +2,14 @@ import random
 import threading
 import time
 from statistics import mean
+from typing import Optional
 
 from cereal import log
 from common.params import Params, put_nonblocking
 from common.realtime import sec_since_boot
 from selfdrive.hardware import HARDWARE
 from selfdrive.swaglog import cloudlog
+from selfdrive.statsd import statlog
 
 CAR_VOLTAGE_LOW_PASS_K = 0.091 # LPF gain for 5s tau (dt/tau / (dt/tau + 1))
 
@@ -16,8 +18,10 @@ CAR_VOLTAGE_LOW_PASS_K = 0.091 # LPF gain for 5s tau (dt/tau / (dt/tau + 1))
 CAR_BATTERY_CAPACITY_uWh = 30e6
 CAR_CHARGING_RATE_W = 45
 
-VBATT_PAUSE_CHARGING = 11.0
+VBATT_PAUSE_CHARGING = 11.0           # Lower limit on the LPF car battery voltage
+VBATT_INSTANT_PAUSE_CHARGING = 7.0    # Lower limit on the instant car battery voltage measurements to avoid triggering on instant power loss
 MAX_TIME_OFFROAD_S = 30*3600
+MIN_ON_TIME_S = 3600
 
 class PowerMonitoring:
   def __init__(self):
@@ -26,7 +30,8 @@ class PowerMonitoring:
     self.last_save_time = 0                     # Used for saving current value in a param
     self.power_used_uWh = 0                     # Integrated power usage in uWh since going into offroad
     self.next_pulsed_measurement_time = None
-    self.car_voltage_mV = 12e3                  # Low-passed version of health voltage
+    self.car_voltage_mV = 12e3                  # Low-passed version of peripheralState voltage
+    self.car_voltage_instant_mV = 12e3          # Last value of peripheralState voltage
     self.integration_lock = threading.Lock()
 
     car_battery_capacity_uWh = self.params.get("CarBatteryCapacity")
@@ -36,14 +41,13 @@ class PowerMonitoring:
     # Reset capacity if it's low
     self.car_battery_capacity_uWh = max((CAR_BATTERY_CAPACITY_uWh / 10), int(car_battery_capacity_uWh))
 
-
   # Calculation tick
-  def calculate(self, health):
+  def calculate(self, peripheralState, ignition):
     try:
       now = sec_since_boot()
 
-      # If health is None, we're probably not in a car, so we don't care
-      if health is None or health.health.hwType == log.HealthData.HwType.unknown:
+      # If peripheralState is None, we're probably not in a car, so we don't care
+      if peripheralState is None or peripheralState.pandaType == log.PandaState.PandaType.unknown:
         with self.integration_lock:
           self.last_measurement_time = None
           self.next_pulsed_measurement_time = None
@@ -51,7 +55,9 @@ class PowerMonitoring:
         return
 
       # Low-pass battery voltage
-      self.car_voltage_mV = ((health.health.voltage * CAR_VOLTAGE_LOW_PASS_K) + (self.car_voltage_mV * (1 -  CAR_VOLTAGE_LOW_PASS_K)))
+      self.car_voltage_instant_mV = peripheralState.voltage
+      self.car_voltage_mV = ((peripheralState.voltage * CAR_VOLTAGE_LOW_PASS_K) + (self.car_voltage_mV * (1 - CAR_VOLTAGE_LOW_PASS_K)))
+      statlog.gauge("car_voltage", self.car_voltage_mV / 1e3)
 
       # Cap the car battery power and save it in a param every 10-ish seconds
       self.car_battery_capacity_uWh = max(self.car_battery_capacity_uWh, 0)
@@ -66,7 +72,7 @@ class PowerMonitoring:
           self.last_measurement_time = now
           return
 
-      if (health.health.ignitionLine or health.health.ignitionCan):
+      if ignition:
         # If there is ignition, we integrate the charging rate of the car
         with self.integration_lock:
           self.power_used_uWh = 0
@@ -77,9 +83,9 @@ class PowerMonitoring:
           self.last_measurement_time = now
       else:
         # No ignition, we integrate the offroad power used by the device
-        is_uno = health.health.hwType == log.HealthData.HwType.uno
+        is_uno = peripheralState.pandaType == log.PandaState.PandaType.uno
         # Get current power draw somehow
-        current_power = HARDWARE.get_current_power_draw()
+        current_power = HARDWARE.get_current_power_draw() # pylint: disable=assignment-from-none
         if current_power is not None:
           pass
         elif HARDWARE.get_battery_status() == 'Discharging':
@@ -132,7 +138,7 @@ class PowerMonitoring:
     except Exception:
       cloudlog.exception("Power monitoring calculation failed")
 
-  def _perform_integration(self, t, current_power):
+  def _perform_integration(self, t: float, current_power: float) -> None:
     with self.integration_lock:
       try:
         if self.last_measurement_time:
@@ -147,38 +153,40 @@ class PowerMonitoring:
         cloudlog.exception("Integration failed")
 
   # Get the power usage
-  def get_power_used(self):
+  def get_power_used(self) -> int:
     return int(self.power_used_uWh)
 
-  def get_car_battery_capacity(self):
+  def get_car_battery_capacity(self) -> int:
     return int(self.car_battery_capacity_uWh)
 
   # See if we need to disable charging
-  def should_disable_charging(self, health, offroad_timestamp):
-    if health is None or offroad_timestamp is None:
+  def should_disable_charging(self, ignition: bool, in_car: bool, offroad_timestamp: Optional[float]) -> bool:
+    if offroad_timestamp is None:
       return False
 
     now = sec_since_boot()
     disable_charging = False
     disable_charging |= (now - offroad_timestamp) > MAX_TIME_OFFROAD_S
-    disable_charging |= (self.car_voltage_mV < (VBATT_PAUSE_CHARGING * 1e3))
+    disable_charging |= (self.car_voltage_mV < (VBATT_PAUSE_CHARGING * 1e3)) and (self.car_voltage_instant_mV > (VBATT_INSTANT_PAUSE_CHARGING * 1e3))
     disable_charging |= (self.car_battery_capacity_uWh <= 0)
-    disable_charging &= (not health.health.ignitionLine and not health.health.ignitionCan)
-    disable_charging &= (self.params.get("DisablePowerDown") != b"1")
+    disable_charging &= not ignition
+    disable_charging &= (not self.params.get_bool("DisablePowerDown"))
+    disable_charging &= in_car
+    disable_charging |= self.params.get_bool("ForcePowerDown")
     return disable_charging
 
   # See if we need to shutdown
-  def should_shutdown(self, health, offroad_timestamp, started_seen, LEON):
-    if health is None or offroad_timestamp is None:
+  def should_shutdown(self, peripheralState, ignition, in_car, offroad_timestamp, started_seen):
+    if offroad_timestamp is None:
       return False
 
     now = sec_since_boot()
-    panda_charging = (health.health.usbPowerMode != log.HealthData.UsbPowerMode.client)
-    BATT_PERC_OFF = 10 if LEON else 3
+    panda_charging = (peripheralState.usbPowerMode != log.PeripheralState.UsbPowerMode.client)
+    BATT_PERC_OFF = 10
 
     should_shutdown = False
     # Wait until we have shut down charging before powering down
-    should_shutdown |= (not panda_charging and self.should_disable_charging(health, offroad_timestamp))
+    should_shutdown |= (not panda_charging and self.should_disable_charging(ignition, in_car, offroad_timestamp))
     should_shutdown |= ((HARDWARE.get_battery_capacity() < BATT_PERC_OFF) and (not HARDWARE.get_battery_charging()) and ((now - offroad_timestamp) > 60))
-    should_shutdown &= started_seen
+    should_shutdown &= started_seen or (now > MIN_ON_TIME_S)
     return should_shutdown
